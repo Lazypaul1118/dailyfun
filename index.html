@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DailyFun 每日趣事</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f0f9ff; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #0ea5e9; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #0284c7; }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
+      100% { box-shadow: 0 0 0 16px rgba(14, 165, 233, 0); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+    .animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
+    .animate-float { animation: float 3s ease-in-out infinite; }
+    .pulse-ring { animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+    /* Stagger children */
+    .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    .stagger > *:nth-child(2) { animation-delay: 0.1s; }
+    .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+    .stagger > *:nth-child(4) { animation-delay: 0.2s; }
+    .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+    .stagger > *:nth-child(6) { animation-delay: 0.3s; }
+
+    /* Card hover effects */
+    .fun-card { transition: all 0.25s ease; }
+    .fun-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(14, 165, 233, 0.15);
+    }
+
+    /* Upload zone hover */
+    .upload-zone { transition: all 0.3s ease; }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: #0ea5e9;
+      background: rgba(14, 165, 233, 0.05);
+      transform: scale(1.01);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    /* Image preview in upload area */
+    .preview-img {
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+    .preview-img:hover { transform: scale(1.03); }
+
+    /* Share toast */
+    .toast-enter { animation: fadeInUp 0.3s ease-out forwards; }
+
+    /* Masonry-like layout for mobile */
+    @media (min-width: 768px) {
+      .masonry-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.25rem;
+      }
+    }
+    @media (min-width: 1024px) {
+      .masonry-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    /* Gradient text */
+    .gradient-text {
+      background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Glass effect */
+    .glass {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* WeChat style share card */
+    .share-card-bg {
+      background: linear-gradient(135deg, #07c160 0%, #06ae56 100%);
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-[#F0F9FF] min-h-screen text-[#0C4A6E]">
+
+  <!-- ===== NAVBAR ===== -->
+  <nav class="fixed top-4 left-4 right-4 z-50 glass rounded-2xl shadow-lg shadow-sky-100/50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-emerald-400 flex items-center justify-center shadow-md shadow-sky-200/50">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 10h.01M15 10h.01M9.5 15a3.5 3.5 0 005 0"/>
+        </svg>
+      </div>
+      <span class="text-lg font-bold gradient-text">DailyFun</span>
+      <span class="text-xs font-medium text-slate-400 hidden sm:inline">每日趣事</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="openUploadModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-sky-200/50 transition-all duration-200 cursor-pointer active:scale-95">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        记录趣事
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="pt-24 pb-16 px-4 max-w-6xl mx-auto">
+
+    <!-- HERO SECTION -->
+    <section id="heroSection" class="text-center mb-12 animate-fade-in-up">
+      <div class="inline-flex items-center gap-2 bg-white/80 backdrop-blur px-4 py-1.5 rounded-full text-sm text-slate-500 mb-6 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        记录生活每一刻精彩
+      </div>
+      <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-4">
+        今天有什么
+        <span class="gradient-text">有趣的事</span>？
+      </h1>
+      <p class="text-slate-500 text-base md:text-lg max-w-lg mx-auto mb-8">
+        上传照片，写下故事，一键分享给微信好友。让快乐不再孤单。
+      </p>
+
+      <!-- Quick stats -->
+      <div class="flex justify-center gap-8 text-sm">
+        <div class="text-center">
+          <div id="totalCount" class="text-2xl font-bold gradient-text">0</div>
+          <div class="text-slate-400">条记录</div>
+        </div>
+        <div class="text-center">
+          <div id="todayCount" class="text-2xl font-bold gradient-text">0</div>
+          <div class="text-slate-400">今日新增</div>
+        </div>
+        <div class="text-center">
+          <div id="imageCount" class="text-2xl font-bold gradient-text">0</div>
+          <div class="text-slate-400">张图片</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EMPTY STATE -->
+    <section id="emptyState" class="hidden text-center py-20">
+      <div class="animate-float inline-block mb-6">
+        <div class="w-24 h-24 mx-auto rounded-3xl bg-white shadow-lg shadow-sky-100/50 flex items-center justify-center">
+          <svg class="w-12 h-12 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+        </div>
+      </div>
+      <h3 class="text-xl font-semibold text-slate-600 mb-2">还没有记录哦~</h3>
+      <p class="text-slate-400 mb-6">点击上方按钮开始记录你的第一条趣事吧！</p>
+      <button onclick="openUploadModal()" class="inline-flex items-center gap-2 bg-gradient-to-r from-sky-500 to-emerald-500 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg hover:shadow-sky-200/50 transition-all duration-200 cursor-pointer active:scale-95">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        开始记录
+      </button>
+    </section>
+
+    <!-- CARDS GRID -->
+    <section id="cardsGrid" class="masonry-grid stagger">
+      <!-- Cards will be rendered here by JS -->
+    </section>
+
+  </main>
+
+  <!-- ===== UPLOAD MODAL ===== -->
+  <div id="uploadModal" class="fixed inset-0 z-[100] hidden">
+    <div class="modal-backdrop absolute inset-0 bg-black/40" onclick="closeUploadModal()"></div>
+    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
+      
+      <!-- Modal header -->
+      <div class="flex items-center justify-between p-5 border-b border-slate-100">
+        <h2 class="text-lg font-semibold text-slate-800">记录新趣事 ✨</h2>
+        <button onclick="closeUploadModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer" aria-label="关闭">
+          <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal body -->
+      <div class="flex-1 overflow-y-auto p-5 space-y-5">
+        
+        <!-- Image Upload Zone -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">📷 添加图片</label>
+          <div 
+            id="uploadZone"
+            class="upload-zone border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center cursor-pointer"
+            onclick="document.getElementById('fileInput').click()"
+          >
+            <input type="file" id="fileInput" accept="image/*" multiple class="hidden" onchange="handleFileSelect(event)">
+            
+            <div id="uploadPlaceholder" class="space-y-3">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-sky-50 flex items-center justify-center">
+                <svg class="w-7 h-7 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2 17v3a2 2 0 002 2h16a2 2 0 002-2v-3"/>
+                </svg>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-slate-600">点击或拖拽上传图片</p>
+                <p class="text-xs text-slate-400 mt-1">支持 JPG、PNG、GIF，最多 9 张</p>
+              </div>
+            </div>
+
+            <!-- Preview container -->
+            <div id="imagePreviewContainer" class="hidden grid grid-cols-3 gap-2 mt-3"></div>
+          </div>
+        </div>
+
+        <!-- Title input -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">✏️ 标题</label>
+          <input 
+            type="text" 
+            id="titleInput" 
+            placeholder="给这个趣事起个名字吧..."
+            maxlength="50"
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300"
+          >
+        </div>
+
+        <!-- Content textarea -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">📝 发生了什么？</label>
+          <textarea 
+            id="contentInput" 
+            rows="4"
+            placeholder="描述一下今天有趣的事情..."
+            maxlength="500"
+            class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm resize-none placeholder:text-slate-300"
+          ></textarea>
+          <div class="text-right text-xs text-slate-400 mt-1"><span id="charCount">0</span>/500</div>
+        </div>
+
+        <!-- Mood selector -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">😊 心情标签</label>
+          <div class="flex flex-wrap gap-2" id="moodSelector">
+            <button data-mood="😄" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">😄 开心</button>
+            <button data-mood="😂" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">😂 搞笑</button>
+            <button data-mood="🥰" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">🥰 温馨</button>
+            <button data-mood="😎" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">😎 酷</button>
+            <button data-mood="🤔" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">🤔 有趣</button>
+            <button data-mood="🌟" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">🌟 精彩</button>
+            <button data-mood="💪" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">💪 成就</button>
+            <button data-mood="🎉" class="mood-btn px-3 py-1.5 rounded-full text-sm border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-all cursor-pointer">🎉 庆祝</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal footer -->
+      <div class="p-5 border-t border-slate-100 flex gap-3">
+        <button onclick="closeUploadModal()" class="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors cursor-pointer">
+          取消
+        </button>
+        <button onclick="saveEntry()" class="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 text-white font-medium text-sm hover:shadow-lg hover:shadow-sky-200/50 transition-all cursor-pointer active:scale-[0.98]">
+          保存分享
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SHARE MODAL (WeChat Style) ===== -->
+  <div id="shareModal" class="fixed inset-0 z-[100] hidden">
+    <div class="modal-backdrop absolute inset-0 bg-black/40" onclick="closeShareModal()"></div>
+    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
+      
+      <!-- Share card preview -->
+      <div id="shareCardPreview" class="p-6">
+        <!-- This will be dynamically filled -->
+      </div>
+
+      <!-- Share options -->
+      <div class="px-6 pb-6 space-y-3">
+        <button onclick="copyLink()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-sky-50 text-sky-600 font-medium text-sm hover:bg-sky-100 transition-colors cursor-pointer">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+          </svg>
+          复制链接（可粘贴到微信发送）
+        </button>
+        <button onclick="downloadShareCard()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 text-emerald-600 font-medium text-sm hover:bg-emerald-100 transition-colors cursor-pointer">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          下载分享卡片图片
+        </button>
+        <button onclick="closeShareModal()" class="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-500 font-medium text-sm hover:bg-slate-50 transition-colors cursor-pointer">
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] hidden">
+    <div class="toast-enter bg-slate-800 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
+      <svg id="toastIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+      </svg>
+      <span id="toastText">操作成功</span>
+    </div>
+  </div>
+
+  <!-- ===== VIEW DETAIL MODAL ===== -->
+  <div id="detailModal" class="fixed inset-0 z-[100] hidden">
+    <div class="modal-backdrop absolute inset-0 bg-black/50" onclick="closeDetailModal()"></div>
+    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
+      <div id="detailContent" class="overflow-y-auto max-h-[85vh]">
+        <!-- Dynamic content -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CANVAS FOR DOWNLOAD (Hidden) ===== -->
+  <canvas id="shareCanvas" class="hidden"></canvas>
+
+  <!-- ===== JAVASCRIPT ===== -->
+  <script src="./app.js"></script>
+</body>
+</html>
