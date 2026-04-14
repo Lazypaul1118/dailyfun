@@ -13,6 +13,7 @@ let currentUser = null; // { username, is_admin }
 let isLoginMode = true; // true = login, false = register
 let likesData = {}; // { entryId: [{ username }] }
 let commentsData = {}; // { entryId: [{ id, username, content, created_at }] }
+let replyingTo = null; // { username, commentId, entryId } for reply mode
 
 // ===== SUPABASE CLIENT =====
 async function supabaseFetch(path, options = {}) {
@@ -432,6 +433,24 @@ async function loadComments() {
   }
 }
 
+function setReply(username, commentId, entryId) {
+  replyingTo = { username, commentId, entryId };
+  renderCommentsSection(entryId);
+  const input = document.getElementById('commentInput');
+  if (input) {
+    input.focus();
+  }
+}
+
+function cancelReply(entryId) {
+  replyingTo = null;
+  renderCommentsSection(entryId);
+  const input = document.getElementById('commentInput');
+  if (input) {
+    input.focus();
+  }
+}
+
 async function addComment(entryId) {
   if (!currentUser) {
     openLoginModal();
@@ -444,17 +463,27 @@ async function addComment(entryId) {
     showToast('请输入评论内容', 'error');
     return;
   }
+
+  // If replying, prepend @username to content
+  let finalContent = content;
+  let targetEntryId = entryId;
+  if (replyingTo) {
+    finalContent = `@${replyingTo.username} ${content}`;
+    targetEntryId = replyingTo.entryId || entryId;
+  }
+
   try {
     const res = await supabaseFetch('comments', {
       method: 'POST',
-      body: JSON.stringify({ entry_id: entryId, username: currentUser.username, content: content }),
+      body: JSON.stringify({ entry_id: targetEntryId, username: currentUser.username, content: finalContent }),
     });
     const saved = await res.json();
-    if (!commentsData[entryId]) commentsData[entryId] = [];
-    commentsData[entryId].push({ id: saved[0].id, username: currentUser.username, content: content, created_at: new Date().toISOString() });
+    if (!commentsData[targetEntryId]) commentsData[targetEntryId] = [];
+    commentsData[targetEntryId].push({ id: saved[0].id, username: currentUser.username, content: finalContent, created_at: new Date().toISOString() });
     input.value = '';
-    showToast('评论成功！');
-    renderCommentsSection(entryId);
+    replyingTo = null;
+    showToast(replyingTo ? '回复成功！' : '评论成功！');
+    renderCommentsSection(targetEntryId);
     renderCards();
   } catch(e) {
     console.error('Comment error:', e);
@@ -489,31 +518,66 @@ function renderCommentsSection(entryId) {
     commentsHtml = comments.map(c => {
       const timeAgo = getTimeAgo(new Date(c.created_at));
       const isOwn = currentUser && c.username === currentUser.username;
+      const isReply = c.content.startsWith('@');
+      const replyMatch = isReply ? c.content.match(/^@(\S+)\s*/) : null;
+      const replyTarget = replyMatch ? replyMatch[1] : null;
+      const displayContent = isReply ? escapeHtml(c.content.replace(/^@\S+\s*/, '')) : escapeHtml(c.content);
+
       return `
-        <div class="flex items-start gap-2.5 group">
-          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
+        <div class="flex items-start gap-2.5 group ${isReply ? 'ml-4 pl-4 border-l-2 border-sky-200' : ''}">
+          <div class="w-8 h-8 rounded-full ${isReply ? 'bg-gradient-to-br from-sky-400 to-indigo-400' : 'bg-gradient-to-br from-amber-400 to-orange-400'} flex items-center justify-center text-white text-xs font-bold shrink-0">
             ${escapeHtml(c.username.charAt(0)).toUpperCase()}
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-sm font-medium text-slate-700">${escapeHtml(c.username)}</span>
               <span class="text-xs text-slate-400">${timeAgo}</span>
+              ${replyTarget ? `<span class="text-xs text-sky-500">回复 <span class="font-medium">${escapeHtml(replyTarget)}</span></span>` : ''}
             </div>
-            <p class="text-sm text-slate-600 mt-0.5 leading-relaxed break-words">${escapeHtml(c.content)}</p>
+            <p class="text-sm text-slate-600 mt-0.5 leading-relaxed break-words">${displayContent}</p>
           </div>
-          ${isOwn ? `
-          <button onclick="deleteComment(${c.id}, ${entryId})"
-                  class="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
-                  title="删除评论">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-          ` : ''}
+          <div class="flex items-center gap-1 shrink-0">
+            ${currentUser ? `
+            <button onclick="setReply('${escapeHtml(c.username).replace(/'/g, "\\'")}', ${c.id}, ${entryId})"
+                    class="p-1 rounded-lg text-slate-300 hover:text-sky-500 hover:bg-sky-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                    title="回复">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+              </svg>
+            </button>
+            ` : ''}
+            ${isOwn ? `
+            <button onclick="deleteComment(${c.id}, ${entryId})"
+                    class="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                    title="删除评论">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            ` : ''}
+          </div>
         </div>
       `;
     }).join('');
   }
+
+  // Add reply indicator above input
+  if (replyingTo) {
+    commentsHtml += `
+      <div class="flex items-center gap-2 bg-sky-50 rounded-xl px-3 py-2">
+        <svg class="w-4 h-4 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+        </svg>
+        <span class="text-xs text-sky-600 flex-1">回复 <span class="font-medium">${escapeHtml(replyingTo.username)}</span></span>
+        <button onclick="cancelReply(${entryId})" class="p-1 rounded-lg hover:bg-sky-100 text-sky-400 hover:text-sky-600 transition-colors cursor-pointer" title="取消回复">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    `;
+  }
+
   container.innerHTML = commentsHtml;
 }
 
