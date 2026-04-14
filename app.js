@@ -9,6 +9,9 @@ let selectedMood = '😄';
 let currentImages = []; // { file, url } or just url strings from DB
 let shareTargetId = null;
 let isLoading = false;
+let currentUser = null; // { username }
+let isLoginMode = true; // true = login, false = register
+let likesData = {}; // { entryId: [{ username }] }
 
 // ===== SUPABASE CLIENT =====
 async function supabaseFetch(path, options = {}) {
@@ -45,9 +48,241 @@ function imageToBase64(file, callback) {
   });
 }
 
+// ===== SIMPLE PASSWORD HASH (not crypto-grade, but sufficient for this app) =====
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'dailyfun_salt_2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ===== LOGIN SYSTEM =====
+function openLoginModal() {
+  isLoginMode = true;
+  updateLoginUI();
+  document.getElementById('loginModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('loginError').classList.add('hidden');
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  setTimeout(() => document.getElementById('loginUsername').focus(), 200);
+}
+
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function toggleLoginMode() {
+  isLoginMode = !isLoginMode;
+  updateLoginUI();
+  document.getElementById('loginError').classList.add('hidden');
+}
+
+function updateLoginUI() {
+  if (isLoginMode) {
+    document.getElementById('loginTitle').textContent = '登录 DailyFun';
+    document.getElementById('loginSubtitle').textContent = '登录后即可点赞和评论';
+    document.getElementById('loginActionBtn').textContent = '登录';
+    document.getElementById('loginToggleText').textContent = '还没有账号？';
+    document.getElementById('loginToggleBtn').textContent = '注册';
+  } else {
+    document.getElementById('loginTitle').textContent = '注册新账号';
+    document.getElementById('loginSubtitle').textContent = '创建一个账号开始使用';
+    document.getElementById('loginActionBtn').textContent = '注册';
+    document.getElementById('loginToggleText').textContent = '已有账号？';
+    document.getElementById('loginToggleBtn').textContent = '登录';
+  }
+}
+
+async function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errorEl = document.getElementById('loginError');
+
+  if (!username || !password) {
+    errorEl.textContent = '请输入用户名和密码';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  if (username.length < 2) {
+    errorEl.textContent = '用户名至少2个字符';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  if (password.length < 3) {
+    errorEl.textContent = '密码至少3个字符';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('loginActionBtn');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+
+  try {
+    const hashed = await hashPassword(password);
+
+    if (isLoginMode) {
+      // Login: check if user exists
+      const res = await supabaseFetch(`users?username=eq.${encodeURIComponent(username)}&select=*`);
+      const users = await res.json();
+
+      if (users.length === 0) {
+        errorEl.textContent = '用户不存在，请先注册';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      if (users[0].password !== hashed) {
+        errorEl.textContent = '密码错误';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      // Login success
+      currentUser = { username };
+      localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
+      closeLoginModal();
+      updateUserUI();
+      showToast(`欢迎回来，${username}！`);
+      await loadLikes();
+      renderCards();
+
+    } else {
+      // Register: check if username taken
+      const res = await supabaseFetch(`users?username=eq.${encodeURIComponent(username)}&select=id`);
+      const existing = await res.json();
+
+      if (existing.length > 0) {
+        errorEl.textContent = '用户名已被注册';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      // Create user
+      await supabaseFetch('users', {
+        method: 'POST',
+        body: JSON.stringify({ username, password: hashed }),
+      });
+
+      // Auto login
+      currentUser = { username };
+      localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
+      closeLoginModal();
+      updateUserUI();
+      showToast(`注册成功！欢迎，${username}！`);
+      await loadLikes();
+      renderCards();
+    }
+  } catch (e) {
+    console.error('Login error:', e);
+    errorEl.textContent = '操作失败，请重试';
+    errorEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isLoginMode ? '登录' : '注册';
+  }
+}
+
+function logoutUser() {
+  currentUser = null;
+  likesData = {};
+  localStorage.removeItem('dailyfun_user');
+  updateUserUI();
+  renderCards();
+  showToast('已退出登录');
+}
+
+function updateUserUI() {
+  const userArea = document.getElementById('userArea');
+  const loginBtn = document.getElementById('loginBtn');
+  const displayName = document.getElementById('displayName');
+
+  if (currentUser) {
+    userArea.classList.remove('hidden');
+    userArea.classList.add('flex');
+    loginBtn.classList.add('hidden');
+    displayName.textContent = currentUser.username;
+  } else {
+    userArea.classList.add('hidden');
+    userArea.classList.remove('flex');
+    loginBtn.classList.remove('hidden');
+    displayName.textContent = '';
+  }
+}
+
+function checkAutoLogin() {
+  try {
+    const saved = localStorage.getItem('dailyfun_user');
+    if (saved) {
+      currentUser = JSON.parse(saved);
+      if (currentUser && currentUser.username) {
+        updateUserUI();
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
+// ===== LIKES SYSTEM =====
+async function loadLikes() {
+  try {
+    const res = await supabaseFetch('likes?select=*');
+    const allLikes = await res.json();
+    likesData = {};
+    allLikes.forEach(like => {
+      if (!likesData[like.entry_id]) likesData[like.entry_id] = [];
+      likesData[like.entry_id].push({ username: like.username, created_at: like.created_at });
+    });
+  } catch(e) {
+    console.error('Failed to load likes:', e);
+  }
+}
+
+async function toggleLike(entryId) {
+  if (!currentUser) {
+    openLoginModal();
+    return;
+  }
+
+  const entryLikes = likesData[entryId] || [];
+  const alreadyLiked = entryLikes.some(l => l.username === currentUser.username);
+
+  try {
+    if (alreadyLiked) {
+      // Unlike
+      await supabaseFetch(`likes?entry_id=eq.${entryId}&username=eq.${encodeURIComponent(currentUser.username)}`, {
+        method: 'DELETE',
+      });
+      likesData[entryId] = entryLikes.filter(l => l.username !== currentUser.username);
+      showToast('已取消点赞');
+    } else {
+      // Like
+      await supabaseFetch('likes', {
+        method: 'POST',
+        body: JSON.stringify({ entry_id: entryId, username: currentUser.username }),
+      });
+      if (!likesData[entryId]) likesData[entryId] = [];
+      likesData[entryId].push({ username: currentUser.username, created_at: new Date().toISOString() });
+      showToast('点赞成功！');
+    }
+    renderCards();
+  } catch(e) {
+    console.error('Like error:', e);
+    showToast('操作失败，请重试', 'error');
+  }
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
+  checkAutoLogin();
   loadEntries();
+  loadLikes();
   setupDragDrop();
   setupMoodSelector();
   setupCharCount();
@@ -69,6 +304,10 @@ async function loadEntries() {
     renderCards();
     updateStats();
     showLoading(false);
+
+    // Load likes for cards
+    await loadLikes();
+    renderCards();
 
     // Handle URL hash for sharing
     if (window.location.hash.startsWith('#share=')) {
@@ -187,6 +426,10 @@ function createCard(entry, index) {
     card.appendChild(noImg);
   }
 
+  const entryLikes = likesData[entry.id] || [];
+  const hasLiked = currentUser && entryLikes.some(l => l.username === currentUser.username);
+  const likeNames = entryLikes.map(l => l.username);
+
   const body = document.createElement('div');
   body.className = 'p-4 space-y-2.5';
   body.innerHTML = `
@@ -195,9 +438,19 @@ function createCard(entry, index) {
       <span class="text-lg shrink-0">${entry.mood || ''}</span>
     </div>
     ${entry.content ? `<p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(entry.content)}</p>` : ''}
+    ${likeNames.length > 0 ? `<div class="text-xs text-slate-400">👍 ${likeNames.join('、')}</div>` : ''}
     <div class="flex items-center justify-between pt-1">
       <time class="text-xs text-slate-400">${dateStr} ${timeStr}</time>
       <div class="flex items-center gap-1.5">
+        <button
+          onclick="event.stopPropagation(); toggleLike(${entry.id})"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg ${hasLiked ? 'bg-red-50 text-red-500' : 'hover:bg-sky-50 text-slate-400 hover:text-sky-500'} transition-colors cursor-pointer"
+          aria-label="点赞">
+          <svg class="w-4 h-4" fill="${hasLiked ? 'currentColor' : 'none'}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+          <span class="text-xs">${entryLikes.length > 0 ? entryLikes.length : ''}</span>
+        </button>
         <button 
           onclick="event.stopPropagation(); openShare(${entry.id})" 
           class="p-1.5 rounded-lg hover:bg-sky-50 text-slate-400 hover:text-sky-500 transition-colors cursor-pointer"
@@ -487,6 +740,9 @@ function openDetail(id) {
 
   const hasImages = images.length > 0;
   const dateStr = formatDateFull(new Date(entry.created_at));
+  const entryLikes = likesData[entry.id] || [];
+  const hasLiked = currentUser && entryLikes.some(l => l.username === currentUser.username);
+  const likeNames = entryLikes.map(l => l.username);
 
   document.getElementById('detailContent').innerHTML = `
     <div class="relative">
@@ -535,7 +791,21 @@ function openDetail(id) {
       </div>
       ` : ''}
 
+      ${likeNames.length > 0 ? `
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-red-500">👍</span>
+        <span class="text-xs text-slate-500">${likeNames.join('、')}</span>
+      </div>
+      ` : ''}
+
       <div class="pt-4 border-t border-slate-100 flex gap-3">
+        <button onclick="event.stopPropagation(); toggleLike(${entry.id}); openDetail(${entry.id});"
+                class="px-4 py-2.5 rounded-xl ${hasLiked ? 'bg-red-50 text-red-500 border border-red-200' : 'border border-slate-200 text-slate-500 hover:bg-sky-50 hover:border-sky-200'} font-medium text-sm transition-colors cursor-pointer flex items-center gap-2">
+          <svg class="w-4 h-4" fill="${hasLiked ? 'currentColor' : 'none'}" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
+          </svg>
+          ${hasLiked ? '已赞' : '点赞'}${entryLikes.length > 0 ? ' ' + entryLikes.length : ''}
+        </button>
         <button onclick="openShare(${entry.id}); closeDetailModal();" 
                 class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 text-white font-medium text-sm hover:shadow-lg transition-all cursor-pointer active:scale-[0.98]">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -842,5 +1112,10 @@ document.addEventListener('keydown', (e) => {
     closeUploadModal();
     closeShareModal();
     closeDetailModal();
+    closeLoginModal();
+  }
+  // Enter to submit login
+  if (e.key === 'Enter' && !document.getElementById('loginModal').classList.contains('hidden')) {
+    handleLogin();
   }
 });
