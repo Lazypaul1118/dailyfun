@@ -12,6 +12,7 @@ let isLoading = false;
 let currentUser = null; // { username, is_admin }
 let isLoginMode = true; // true = login, false = register
 let likesData = {}; // { entryId: [{ username }] }
+let commentsData = {}; // { entryId: [{ id, username, content, created_at }] }
 
 // ===== SUPABASE CLIENT =====
 async function supabaseFetch(path, options = {}) {
@@ -416,6 +417,116 @@ async function toggleLike(entryId) {
   }
 }
 
+// ===== COMMENTS SYSTEM =====
+async function loadComments() {
+  try {
+    const res = await supabaseFetch('comments?select=*&order=created_at.asc');
+    const allComments = await res.json();
+    commentsData = {};
+    allComments.forEach(c => {
+      if (!commentsData[c.entry_id]) commentsData[c.entry_id] = [];
+      commentsData[c.entry_id].push({ id: c.id, username: c.username, content: c.content, created_at: c.created_at });
+    });
+  } catch(e) {
+    console.error('Failed to load comments:', e);
+  }
+}
+
+async function addComment(entryId) {
+  if (!currentUser) {
+    openLoginModal();
+    return;
+  }
+  const input = document.getElementById('commentInput');
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) {
+    showToast('请输入评论内容', 'error');
+    return;
+  }
+  try {
+    const res = await supabaseFetch('comments', {
+      method: 'POST',
+      body: JSON.stringify({ entry_id: entryId, username: currentUser.username, content: content }),
+    });
+    const saved = await res.json();
+    if (!commentsData[entryId]) commentsData[entryId] = [];
+    commentsData[entryId].push({ id: saved[0].id, username: currentUser.username, content: content, created_at: new Date().toISOString() });
+    input.value = '';
+    showToast('评论成功！');
+    renderCommentsSection(entryId);
+    renderCards();
+  } catch(e) {
+    console.error('Comment error:', e);
+    showToast('评论失败，请重试', 'error');
+  }
+}
+
+async function deleteComment(commentId, entryId) {
+  if (!currentUser) return;
+  try {
+    await supabaseFetch(`comments?id=eq.${commentId}`, { method: 'DELETE' });
+    if (commentsData[entryId]) {
+      commentsData[entryId] = commentsData[entryId].filter(c => c.id !== commentId);
+    }
+    showToast('评论已删除');
+    renderCommentsSection(entryId);
+    renderCards();
+  } catch(e) {
+    console.error('Delete comment error:', e);
+    showToast('删除失败', 'error');
+  }
+}
+
+function renderCommentsSection(entryId) {
+  const container = document.getElementById('commentsSection');
+  if (!container) return;
+  const comments = commentsData[entryId] || [];
+  let commentsHtml = '';
+  if (comments.length === 0) {
+    commentsHtml = '<p class="text-sm text-slate-400 text-center py-3">还没有评论，来说两句吧 ✨</p>';
+  } else {
+    commentsHtml = comments.map(c => {
+      const timeAgo = getTimeAgo(new Date(c.created_at));
+      const isOwn = currentUser && c.username === currentUser.username;
+      return `
+        <div class="flex items-start gap-2.5 group">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            ${escapeHtml(c.username.charAt(0)).toUpperCase()}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-slate-700">${escapeHtml(c.username)}</span>
+              <span class="text-xs text-slate-400">${timeAgo}</span>
+            </div>
+            <p class="text-sm text-slate-600 mt-0.5 leading-relaxed break-words">${escapeHtml(c.content)}</p>
+          </div>
+          ${isOwn ? `
+          <button onclick="deleteComment(${c.id}, ${entryId})"
+                  class="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                  title="删除评论">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  container.innerHTML = commentsHtml;
+}
+
+function getTimeAgo(date) {
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+  if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+  if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+  return formatDate(date);
+}
+
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
   setupDragDrop();
@@ -445,6 +556,8 @@ async function loadEntries() {
 
     // Load likes for cards
     await loadLikes();
+    // Load comments for cards
+    await loadComments();
     renderCards();
 
     // Handle URL hash for sharing
@@ -567,6 +680,8 @@ function createCard(entry, index) {
   const entryLikes = likesData[entry.id] || [];
   const hasLiked = currentUser && entryLikes.some(l => l.username === currentUser.username);
   const likeNames = entryLikes.map(l => l.username);
+  const entryComments = commentsData[entry.id] || [];
+  const commentCount = entryComments.length;
 
   const body = document.createElement('div');
   body.className = 'p-4 space-y-2.5';
@@ -577,6 +692,7 @@ function createCard(entry, index) {
     </div>
     ${entry.content ? `<p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(entry.content)}</p>` : ''}
     ${likeNames.length > 0 ? `<div class="text-xs text-slate-400">👍 ${likeNames.join('、')}</div>` : ''}
+    ${commentCount > 0 ? `<div class="text-xs text-slate-400">💬 ${entryComments.slice(-2).map(c => c.username).join('、')}${commentCount > 2 ? ' 等' + commentCount + '人' : ''}</div>` : ''}
     <div class="flex items-center justify-between pt-1">
       <time class="text-xs text-slate-400">${dateStr} ${timeStr}</time>
       <div class="flex items-center gap-1.5">
@@ -588,6 +704,15 @@ function createCard(entry, index) {
             <path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/>
           </svg>
           <span class="text-xs">${entryLikes.length > 0 ? entryLikes.length : ''}</span>
+        </button>
+        <button 
+          onclick="event.stopPropagation(); openDetail(${entry.id})"
+          class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-sky-50 text-slate-400 hover:text-sky-500 transition-colors cursor-pointer"
+          aria-label="评论">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+          <span class="text-xs">${commentCount > 0 ? commentCount : ''}</span>
         </button>
         <button 
           onclick="event.stopPropagation(); openShare(${entry.id})" 
@@ -881,6 +1006,8 @@ function openDetail(id) {
   const entryLikes = likesData[entry.id] || [];
   const hasLiked = currentUser && entryLikes.some(l => l.username === currentUser.username);
   const likeNames = entryLikes.map(l => l.username);
+  const entryComments = commentsData[entry.id] || [];
+  const commentCount = entryComments.length;
 
   document.getElementById('detailContent').innerHTML = `
     <div class="relative">
@@ -956,11 +1083,44 @@ function openDetail(id) {
           删除
         </button>
       </div>
+
+      <!-- Comments Section -->
+      <div class="pt-4 border-t border-slate-100">
+        <div class="flex items-center gap-2 mb-3">
+          <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+          <span class="text-sm font-medium text-slate-600">评论 (${commentCount})</span>
+        </div>
+        <div id="commentsSection" class="space-y-3 mb-3"></div>
+        ${currentUser ? `
+        <div class="flex gap-2">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            ${escapeHtml(currentUser.username.charAt(0)).toUpperCase()}
+          </div>
+          <div class="flex-1 flex gap-2">
+            <input type="text" id="commentInput" placeholder="写评论..." maxlength="200"
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300"
+              onkeydown="if(event.key==='Enter')addComment(${entry.id})">
+            <button onclick="addComment(${entry.id})"
+                    class="px-3 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 text-white text-sm font-medium hover:shadow-lg transition-all cursor-pointer active:scale-[0.98] shrink-0">
+              发送
+            </button>
+          </div>
+        </div>
+        ` : `
+        <p class="text-center text-sm text-slate-400 cursor-pointer hover:text-sky-500 transition-colors" onclick="openLoginModal()">
+          <button onclick="openLoginModal()" class="text-sky-500 hover:text-sky-600 font-medium cursor-pointer">登录</button> 后即可评论
+        </p>
+        `}
+      </div>
     </div>
   `;
 
   document.getElementById('detailModal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  // Render comments
+  renderCommentsSection(entry.id);
 }
 
 function closeDetailModal() {
