@@ -254,7 +254,8 @@
   <!-- ===== UPLOAD MODAL ===== -->
   <div id="uploadModal" class="fixed inset-0 z-[100] hidden">
     <div class="modal-backdrop absolute inset-0 bg-black/40" onclick="closeUploadModal()"></div>
-    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
+    <div class="absolute inset-0 flex items-center justify-center p-4 md:p-0">
+      <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in relative">
       
       <!-- Modal header -->
       <div class="flex items-center justify-between p-5 border-b border-slate-100">
@@ -347,13 +348,15 @@
           保存分享
         </button>
       </div>
+      </div>
     </div>
   </div>
 
   <!-- ===== SHARE MODAL (WeChat Style) ===== -->
   <div id="shareModal" class="fixed inset-0 z-[100] hidden">
     <div class="modal-backdrop absolute inset-0 bg-black/40" onclick="closeShareModal()"></div>
-    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
+    <div class="absolute inset-0 flex items-center justify-center p-4 md:p-0">
+      <div class="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in relative">
       
       <!-- Share card preview -->
       <div id="shareCardPreview" class="p-6">
@@ -377,6 +380,7 @@
         <button onclick="closeShareModal()" class="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-500 font-medium text-sm hover:bg-slate-50 transition-colors cursor-pointer">
           关闭
         </button>
+      </div>
       </div>
     </div>
   </div>
@@ -439,9 +443,11 @@
   <!-- ===== VIEW DETAIL MODAL ===== -->
   <div id="detailModal" class="fixed inset-0 z-[100] hidden">
     <div class="modal-backdrop absolute inset-0 bg-black/50" onclick="closeDetailModal()"></div>
-    <div class="absolute inset-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
-      <div id="detailContent" class="overflow-y-auto max-h-[85vh]">
-        <!-- Dynamic content -->
+    <div class="absolute inset-0 flex items-center justify-center p-4 md:p-0">
+      <div class="w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in relative">
+        <div id="detailContent" class="overflow-y-auto max-h-[85vh]">
+          <!-- Dynamic content -->
+        </div>
       </div>
     </div>
   </div>
