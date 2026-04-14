@@ -166,12 +166,6 @@
         </svg>
         登录
       </button>
-      <button onclick="openUploadModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-sky-500 to-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-sky-200/50 transition-all duration-200 cursor-pointer active:scale-95">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-        </svg>
-        记录趣事
-      </button>
     </div>
   </nav>
 
@@ -256,6 +250,13 @@
     </section>
 
   </main>
+
+  <!-- ===== FLOATING ACTION BUTTON (FAB) ===== -->
+  <button id="fabBtn" onclick="openUploadModal()" class="fixed bottom-6 right-6 z-30 w-14 h-14 bg-gradient-to-br from-sky-500 to-emerald-500 text-white rounded-full shadow-lg shadow-sky-300/50 flex items-center justify-center hover:shadow-xl hover:shadow-sky-300/60 hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer">
+    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+    </svg>
+  </button>
 
   <!-- ===== UPLOAD MODAL ===== -->
   <div id="uploadModal" class="fixed inset-0 z-[100] hidden">
