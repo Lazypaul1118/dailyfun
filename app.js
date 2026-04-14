@@ -66,12 +66,28 @@ function openLoginModal() {
   document.getElementById('loginError').classList.add('hidden');
   document.getElementById('loginUsername').value = '';
   document.getElementById('loginPassword').value = '';
+  // Hide close button if on lock screen
+  const closeBtn = document.querySelector('#loginModal .absolute.-top-2');
+  if (closeBtn) {
+    closeBtn.style.display = currentUser ? '' : 'none';
+  }
   setTimeout(() => document.getElementById('loginUsername').focus(), 200);
 }
 
 function closeLoginModal() {
   document.getElementById('loginModal').classList.add('hidden');
   document.body.style.overflow = '';
+}
+
+// ===== LOCK SCREEN =====
+function showLockScreen() {
+  document.getElementById('lockScreen').classList.remove('hidden');
+  document.getElementById('mainContent').classList.add('hidden');
+}
+
+function hideLockScreen() {
+  document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('mainContent').classList.remove('hidden');
 }
 
 function toggleLoginMode() {
@@ -147,10 +163,10 @@ async function handleLogin() {
       currentUser = { username };
       localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
       closeLoginModal();
+      hideLockScreen();
       updateUserUI();
       showToast(`欢迎回来，${username}！`);
-      await loadLikes();
-      renderCards();
+      await loadEntries();
 
     } else {
       // Register: check if username taken
@@ -173,10 +189,10 @@ async function handleLogin() {
       currentUser = { username };
       localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
       closeLoginModal();
+      hideLockScreen();
       updateUserUI();
       showToast(`注册成功！欢迎，${username}！`);
-      await loadLikes();
-      renderCards();
+      await loadEntries();
     }
   } catch (e) {
     console.error('Login error:', e);
@@ -193,7 +209,7 @@ function logoutUser() {
   likesData = {};
   localStorage.removeItem('dailyfun_user');
   updateUserUI();
-  renderCards();
+  showLockScreen();
   showToast('已退出登录');
 }
 
@@ -222,10 +238,12 @@ function checkAutoLogin() {
       currentUser = JSON.parse(saved);
       if (currentUser && currentUser.username) {
         updateUserUI();
+        hideLockScreen();
         return true;
       }
     }
   } catch(e) {}
+  showLockScreen();
   return false;
 }
 
@@ -280,12 +298,12 @@ async function toggleLike(entryId) {
 
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
-  checkAutoLogin();
-  loadEntries();
-  loadLikes();
   setupDragDrop();
   setupMoodSelector();
   setupCharCount();
+  if (checkAutoLogin()) {
+    loadEntries();
+  }
 });
 
 // ===== LOAD ENTRIES FROM SUPABASE =====
