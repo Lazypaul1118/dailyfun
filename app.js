@@ -1,9 +1,8 @@
 // ===== DailyFun App - Supabase Version =====
-// 数据存储：Supabase（文本） + ImgBB（图片）
+// 数据存储：Supabase（文本 + 图片 Storage）
 
 const SUPABASE_URL = 'https://okybliaftfurpasqpnec.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9reWJsaWFmdGZ1cnBhc3FwbmVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNjAzMDUsImV4cCI6MjA5MTczNjMwNX0.T5RmncrieNQevZNprS_-htn5foVXr286EB0WUDO7Llg';
-const IMGBB_API_KEY = 'd4e1eb2e91b4400a21eb11e36b62ac72';
 
 let entries = [];
 let selectedMood = '😄';
@@ -36,26 +35,14 @@ async function supabaseFetch(path, options = {}) {
   }
 }
 
-// ===== IMGBB IMAGE UPLOAD =====
-async function uploadImageToImgBB(file) {
-  const formData = new FormData();
-  formData.append('key', IMGBB_API_KEY);
-  formData.append('image', file);
-
-  try {
-    const res = await fetch('https://api.imgbb.com/1/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    if (data.success) {
-      return data.data.thumb_url; // use thumbnail for faster loading
-    }
-    throw new Error('ImgBB upload failed');
-  } catch (e) {
-    console.error('ImgBB error:', e);
-    throw e;
-  }
+// ===== IMAGE TO BASE64 (store directly in DB) =====
+function imageToBase64(file, callback) {
+  // Compress to max 200KB, then convert to base64
+  compressImage(file, 800, 0.6, (blob) => {
+    const reader = new FileReader();
+    reader.onload = (e) => callback(e.target.result); // data:image/jpeg;base64,...
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ===== INITIALIZATION =====
@@ -397,22 +384,20 @@ async function saveEntry() {
   }
 
   try {
-    // Upload images to ImgBB
-    const imageUrls = [];
-    for (let i = 0; i < currentImages.length; i++) {
-      currentImages[i].uploading = true;
-      updateImagePreview();
-      
-      try {
-        const url = await uploadImageToImgBB(currentImages[i].file);
-        imageUrls.push(url);
-      } catch (e) {
-        showToast(`第 ${i + 1} 张图片上传失败，已跳过`, 'warning');
-      }
-      
-      currentImages[i].uploading = false;
-      updateImagePreview();
-    }
+    // Convert images to Base64 (stored directly in DB)
+    const imageUrls = await Promise.all(
+      currentImages.map(item => {
+        return new Promise((resolve) => {
+          currentImages[currentImages.indexOf(item)].uploading = true;
+          updateImagePreview();
+          imageToBase64(item.file, (base64) => {
+            currentImages[currentImages.indexOf(item)].uploading = false;
+            updateImagePreview();
+            resolve(base64);
+          });
+        });
+      })
+    );
 
     // Save to Supabase
     const entry = {
