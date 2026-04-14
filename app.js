@@ -104,7 +104,8 @@ function updateStats() {
 
   animateNumber('totalCount', total);
   animateNumber('todayCount', todayCount);
-  animateNumber('imageCount', '∞'); // images now hosted externally
+  const imgTotal = entries.reduce((sum, e) => sum + (e.images ? e.images.length : 0), 0);
+  animateNumber('imageCount', imgTotal);
 }
 
 function animateNumber(id, target) {
@@ -141,75 +142,84 @@ function renderCards() {
 
   emptyState.classList.add('hidden');
 
-  grid.innerHTML = entries.map((entry, index) => createCard(entry, index)).join('');
+  grid.innerHTML = '';
+  entries.forEach((entry, index) => {
+    grid.appendChild(createCard(entry, index));
+  });
 }
 
 function createCard(entry, index) {
   const hasImages = entry.images && entry.images.length > 0;
-  const previewImg = hasImages ? entry.images[0] : '';
   const dateStr = formatDate(new Date(entry.created_at));
   const timeStr = formatTime(new Date(entry.created_at));
 
-  return `
-    <article class="fun-card bg-white rounded-2xl overflow-hidden shadow-sm shadow-slate-100/50 cursor-pointer opacity-0 animate-fade-in-up" 
-             style="animation-delay: ${index * 0.06}s"
-             onclick="openDetail(${entry.id})"
-             role="button"
-             tabindex="0"
-             aria-label="查看趣事: ${escapeHtml(entry.title || '无标题')}">
-      
-      ${hasImages ? `
-      <div class="relative aspect-[4/3] overflow-hidden bg-slate-100">
-        <img src="${previewImg}" alt="${escapeHtml(entry.title)}" 
-             class="w-full h-full preview-img"
-             loading="lazy"
-             onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gradient-to-br from-sky-100 to-emerald-100 flex items-center justify-center\\'><svg class=\\'w-12 h-12 text-sky-300\\' fill=\\'none\\' viewBox=\\'0 0 24 24\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'3\\'/><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'/><path d=\\'M21 15l-5-5L5 21\\'/></svg></div>'">
-        ${entry.images.length > 1 ? `
-        <div class="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
-          +${entry.images.length - 1}
-        </div>
-        ` : ''}
-      </div>
-      ` : `
-      <div class="aspect-[4/3] bg-gradient-to-br from-sky-50 via-emerald-50 to-sky-100 flex items-center justify-center">
-        <span class="text-4xl">${entry.mood || '📝'}</span>
-      </div>
-      `}
+  const card = document.createElement('article');
+  card.className = 'fun-card bg-white rounded-2xl overflow-hidden shadow-sm shadow-slate-100/50 cursor-pointer opacity-0 animate-fade-in-up';
+  card.style.animationDelay = `${index * 0.06}s`;
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `查看趣事: ${entry.title || '无标题'}`);
+  card.onclick = () => openDetail(entry.id);
 
-      <div class="p-4 space-y-2.5">
-        <div class="flex items-start justify-between gap-2">
-          <h3 class="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">${escapeHtml(entry.title) || '无标题趣事'}</h3>
-          <span class="text-lg shrink-0">${entry.mood || ''}</span>
-        </div>
-        
-        ${entry.content ? `
-        <p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(entry.content)}</p>
-        ` : ''}
+  if (hasImages) {
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'relative aspect-[4/3] overflow-hidden bg-slate-100';
+    const img = document.createElement('img');
+    img.src = entry.images[0];
+    img.alt = entry.title || '';
+    img.className = 'w-full h-full preview-img';
+    img.loading = 'lazy';
+    img.onerror = function() {
+      this.parentElement.innerHTML = '<div class="w-full h-full bg-gradient-to-br from-sky-100 to-emerald-100 flex items-center justify-center"><svg class="w-12 h-12 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>';
+    };
+    imgWrap.appendChild(img);
+    if (entry.images.length > 1) {
+      const badge = document.createElement('div');
+      badge.className = 'absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm';
+      badge.textContent = `+${entry.images.length - 1}`;
+      imgWrap.appendChild(badge);
+    }
+    card.appendChild(imgWrap);
+  } else {
+    const noImg = document.createElement('div');
+    noImg.className = 'aspect-[4/3] bg-gradient-to-br from-sky-50 via-emerald-50 to-sky-100 flex items-center justify-center';
+    noImg.innerHTML = `<span class="text-4xl">${entry.mood || '📝'}</span>`;
+    card.appendChild(noImg);
+  }
 
-        <div class="flex items-center justify-between pt-1">
-          <time class="text-xs text-slate-400">${dateStr} ${timeStr}</time>
-          <div class="flex items-center gap-1.5">
-            <button 
-              onclick="event.stopPropagation(); openShare(${entry.id})" 
-              class="p-1.5 rounded-lg hover:bg-sky-50 text-slate-400 hover:text-sky-500 transition-colors cursor-pointer"
-              aria-label="分享">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-              </svg>
-            </button>
-            <button 
-              onclick="event.stopPropagation(); deleteEntry(${entry.id})" 
-              class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-              aria-label="删除">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-              </svg>
-            </button>
-          </div>
-        </div>
+  const body = document.createElement('div');
+  body.className = 'p-4 space-y-2.5';
+  body.innerHTML = `
+    <div class="flex items-start justify-between gap-2">
+      <h3 class="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">${escapeHtml(entry.title) || '无标题趣事'}</h3>
+      <span class="text-lg shrink-0">${entry.mood || ''}</span>
+    </div>
+    ${entry.content ? `<p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(entry.content)}</p>` : ''}
+    <div class="flex items-center justify-between pt-1">
+      <time class="text-xs text-slate-400">${dateStr} ${timeStr}</time>
+      <div class="flex items-center gap-1.5">
+        <button 
+          onclick="event.stopPropagation(); openShare(${entry.id})" 
+          class="p-1.5 rounded-lg hover:bg-sky-50 text-slate-400 hover:text-sky-500 transition-colors cursor-pointer"
+          aria-label="分享">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+          </svg>
+        </button>
+        <button 
+          onclick="event.stopPropagation(); deleteEntry(${entry.id})" 
+          class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+          aria-label="删除">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
       </div>
-    </article>
+    </div>
   `;
+  card.appendChild(body);
+
+  return card;
 }
 
 // ===== UPLOAD MODAL =====
