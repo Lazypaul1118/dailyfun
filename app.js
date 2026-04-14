@@ -9,7 +9,7 @@ let selectedMood = '😄';
 let currentImages = []; // { file, url } or just url strings from DB
 let shareTargetId = null;
 let isLoading = false;
-let currentUser = null; // { username }
+let currentUser = null; // { username, is_admin }
 let isLoginMode = true; // true = login, false = register
 let likesData = {}; // { entryId: [{ username }] }
 
@@ -159,8 +159,15 @@ async function handleLogin() {
         return;
       }
 
+      // Check if user is active
+      if (users[0].is_active === false) {
+        errorEl.textContent = '您的账号已被管理员禁用，请联系管理员';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
       // Login success
-      currentUser = { username };
+      currentUser = { username, is_admin: !!users[0].is_admin };
       localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
       closeLoginModal();
       hideLockScreen();
@@ -180,13 +187,14 @@ async function handleLogin() {
       }
 
       // Create user
-      await supabaseFetch('users', {
+      const createRes = await supabaseFetch('users', {
         method: 'POST',
         body: JSON.stringify({ username, password: hashed }),
       });
+      const created = await createRes.json();
 
       // Auto login
-      currentUser = { username };
+      currentUser = { username, is_admin: false };
       localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
       closeLoginModal();
       hideLockScreen();
@@ -217,17 +225,25 @@ function updateUserUI() {
   const userArea = document.getElementById('userArea');
   const loginBtn = document.getElementById('loginBtn');
   const displayName = document.getElementById('displayName');
+  const adminBtn = document.getElementById('adminBtn');
 
   if (currentUser) {
     userArea.classList.remove('hidden');
     userArea.classList.add('flex');
     loginBtn.classList.add('hidden');
     displayName.textContent = currentUser.username;
+    // Show admin button only for admins
+    if (currentUser.is_admin) {
+      adminBtn.classList.remove('hidden');
+    } else {
+      adminBtn.classList.add('hidden');
+    }
   } else {
     userArea.classList.add('hidden');
     userArea.classList.remove('flex');
     loginBtn.classList.remove('hidden');
     displayName.textContent = '';
+    adminBtn.classList.add('hidden');
   }
 }
 
@@ -237,6 +253,26 @@ function checkAutoLogin() {
     if (saved) {
       currentUser = JSON.parse(saved);
       if (currentUser && currentUser.username) {
+        // Verify account is still active (async check, show UI optimistically)
+        supabaseFetch(`users?username=eq.${encodeURIComponent(currentUser.username)}&select=username,is_admin,is_active`)
+          .then(res => res.json())
+          .then(users => {
+            if (users.length === 0 || users[0].is_active === false) {
+              // Account disabled or deleted
+              currentUser = null;
+              localStorage.removeItem('dailyfun_user');
+              updateUserUI();
+              showLockScreen();
+              showToast('您的账号已被禁用', 'warning');
+            } else {
+              // Update admin status
+              currentUser.is_admin = !!users[0].is_admin;
+              localStorage.setItem('dailyfun_user', JSON.stringify(currentUser));
+              updateUserUI();
+            }
+          })
+          .catch(e => console.error('Auto-login check failed:', e));
+
         updateUserUI();
         hideLockScreen();
         return true;
@@ -245,6 +281,90 @@ function checkAutoLogin() {
   } catch(e) {}
   showLockScreen();
   return false;
+}
+
+// ===== ADMIN PANEL =====
+async function openAdminPanel() {
+  if (!currentUser || !currentUser.is_admin) {
+    showToast('无权限访问', 'error');
+    return;
+  }
+  document.getElementById('adminModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  await loadAdminUsers();
+}
+
+function closeAdminPanel() {
+  document.getElementById('adminModal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+async function loadAdminUsers() {
+  const list = document.getElementById('adminUserList');
+  list.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm">加载中...</div>';
+
+  try {
+    const res = await supabaseFetch('users?select=*&order=created_at.asc');
+    const users = await res.json();
+
+    if (users.length === 0) {
+      list.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm">暂无注册用户</div>';
+      return;
+    }
+
+    list.innerHTML = users.map(user => {
+      const isActive = user.is_active !== false;
+      const isAdmin = !!user.is_admin;
+      const isSelf = user.username === currentUser.username;
+      const dateStr = new Date(user.created_at).toLocaleDateString('zh-CN');
+
+      return `
+        <div class="flex items-center justify-between py-3 ${user !== users[users.length-1] ? 'border-b border-slate-50' : ''}">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-full ${isActive ? 'bg-gradient-to-br from-sky-400 to-emerald-400' : 'bg-slate-200'} flex items-center justify-center shrink-0">
+              <span class="text-white text-sm font-medium">${user.username.charAt(0).toUpperCase()}</span>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-medium text-slate-800 truncate">${escapeHtml(user.username)}</span>
+                ${isAdmin ? '<span class="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">管理员</span>' : ''}
+                ${isSelf ? '<span class="text-xs bg-sky-100 text-sky-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">我</span>' : ''}
+              </div>
+              <span class="text-xs text-slate-400">${dateStr} 注册</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            ${!isSelf ? `
+            <label class="relative inline-flex items-center cursor-pointer" title="${isActive ? '点击禁用' : '点击启用'}">
+              <input type="checkbox" class="sr-only peer" ${isActive ? 'checked' : ''} onchange="toggleUserActive('${escapeHtml(user.username)}', this.checked)">
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+            ` : `
+            <span class="text-xs text-slate-400">不可操作</span>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="text-center py-8 text-red-400 text-sm">加载失败，请重试</div>';
+    console.error('Admin load error:', e);
+  }
+}
+
+async function toggleUserActive(username, active) {
+  try {
+    await supabaseFetch(`users?username=eq.${encodeURIComponent(username)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: active }),
+    });
+    showToast(active ? `已启用 ${username}` : `已禁用 ${username}`);
+    await loadAdminUsers();
+  } catch(e) {
+    showToast('操作失败，请重试', 'error');
+    // Reload to revert UI state
+    await loadAdminUsers();
+  }
 }
 
 // ===== LIKES SYSTEM =====
@@ -1131,6 +1251,7 @@ document.addEventListener('keydown', (e) => {
     closeShareModal();
     closeDetailModal();
     closeLoginModal();
+    closeAdminPanel();
   }
   // Enter to submit login
   if (e.key === 'Enter' && !document.getElementById('loginModal').classList.contains('hidden')) {
