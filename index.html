@@ -25,6 +25,10 @@
       from { opacity: 0; transform: scale(0.9); }
       to { opacity: 1; transform: scale(1); }
     }
+    @keyframes scaleInCentered {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
     @keyframes float {
       0%, 100% { transform: translateY(0px); }
       50% { transform: translateY(-8px); }
@@ -380,41 +384,43 @@
   <!-- ===== LOGIN MODAL ===== -->
   <div id="loginModal" class="fixed inset-0 z-[100] hidden">
     <div class="modal-backdrop absolute inset-0 bg-black/40" onclick="if(currentUser) closeLoginModal()"></div>
-    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[320px] bg-white rounded-2xl shadow-2xl overflow-visible animate-scale-in">
-      <button onclick="closeLoginModal()" class="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white shadow-md border border-slate-100 flex items-center justify-center transition-colors cursor-pointer z-10">
-        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-      <div class="px-5 pt-5 pb-4">
-        <div class="text-center mb-4">
-          <div class="w-11 h-11 mx-auto rounded-xl bg-gradient-to-br from-sky-400 to-emerald-400 flex items-center justify-center shadow-sm mb-2">
-            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-            </svg>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="w-full max-w-[320px] bg-white rounded-2xl shadow-2xl overflow-visible animate-scale-in relative">
+        <button onclick="closeLoginModal()" class="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white shadow-md border border-slate-100 flex items-center justify-center transition-colors cursor-pointer z-10">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+        <div class="px-5 pt-5 pb-4">
+          <div class="text-center mb-4">
+            <div class="w-11 h-11 mx-auto rounded-xl bg-gradient-to-br from-sky-400 to-emerald-400 flex items-center justify-center shadow-sm mb-2">
+              <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+            </div>
+            <h2 class="text-lg font-bold text-slate-800" id="loginTitle">登录 DailyFun</h2>
+            <p class="text-xs text-slate-400 mt-0.5" id="loginSubtitle">登录后即可点赞和评论</p>
           </div>
-          <h2 class="text-lg font-bold text-slate-800" id="loginTitle">登录 DailyFun</h2>
-          <p class="text-xs text-slate-400 mt-0.5" id="loginSubtitle">登录后即可点赞和评论</p>
-        </div>
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">用户名</label>
-            <input type="text" id="loginUsername" placeholder="输入用户名" maxlength="20"
-              class="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300">
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">用户名</label>
+              <input type="text" id="loginUsername" placeholder="输入用户名" maxlength="20"
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">密码</label>
+              <input type="password" id="loginPassword" placeholder="输入密码" maxlength="50"
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300">
+            </div>
+            <div id="loginError" class="hidden text-xs text-red-500 text-center"></div>
+            <button onclick="handleLogin()" id="loginActionBtn" class="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 text-white font-medium text-sm hover:shadow-lg hover:shadow-sky-200/50 transition-all cursor-pointer active:scale-[0.98]">
+              登录
+            </button>
+            <p class="text-center text-xs text-slate-400">
+              <span id="loginToggleText">还没有账号？</span>
+              <button onclick="toggleLoginMode()" id="loginToggleBtn" class="text-sky-500 font-medium hover:text-sky-600 cursor-pointer">注册</button>
+            </p>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">密码</label>
-            <input type="password" id="loginPassword" placeholder="输入密码" maxlength="50"
-              class="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none transition-all text-sm placeholder:text-slate-300">
-          </div>
-          <div id="loginError" class="hidden text-xs text-red-500 text-center"></div>
-          <button onclick="handleLogin()" id="loginActionBtn" class="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-emerald-500 text-white font-medium text-sm hover:shadow-lg hover:shadow-sky-200/50 transition-all cursor-pointer active:scale-[0.98]">
-            登录
-          </button>
-          <p class="text-center text-xs text-slate-400">
-            <span id="loginToggleText">还没有账号？</span>
-            <button onclick="toggleLoginMode()" id="loginToggleBtn" class="text-sky-500 font-medium hover:text-sky-600 cursor-pointer">注册</button>
-          </p>
         </div>
       </div>
     </div>
