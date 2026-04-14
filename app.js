@@ -59,6 +59,13 @@ async function loadEntries() {
     showLoading(true);
     const res = await supabaseFetch('entries?select=*&order=created_at.desc');
     entries = await res.json();
+    // Parse images JSON string to array
+    entries.forEach(e => {
+      if (typeof e.images === 'string') {
+        try { e.images = JSON.parse(e.images); } catch(err) { e.images = []; }
+      }
+      if (!Array.isArray(e.images)) e.images = [];
+    });
     renderCards();
     updateStats();
     showLoading(false);
